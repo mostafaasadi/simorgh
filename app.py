@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import threading
 import subprocess
 import urllib.request
 import urllib.error
@@ -27,6 +28,7 @@ DEFAULT_CONFIG = {
     "tar1090_base_url": "/tar1090/",
     "service_status_ttl": 15,
     "rtlsdr_cache_ttl": 10,
+    "traffic_watch_interval": 10,
     "usb_devices_dir": "/sys/bus/usb/devices",
     "thermal_zone_path": "/sys/class/thermal/thermal_zone0/temp",
     "receiver_lat": None,
@@ -346,6 +348,38 @@ def get_service_status(name):
     return status
 
 
+def refresh_last_traffic():
+    global _last_traffic_timestamp
+
+    stats = load_runtime_json("stats.json")
+    status = load_runtime_json("status.json")
+    last1 = stats.get("last1min", {}) if isinstance(stats.get("last1min"), dict) else {}
+
+    stats_now = to_number(stats.get("now"), to_number(status.get("now"), 0))
+    if not stats_now:
+        return
+
+    positions_1m = to_int(last1.get("position_count_total"), 0)
+    current_aircraft = to_int(status.get("aircraft_with_pos"), 0) + to_int(status.get("aircraft_without_pos"), 0)
+
+    if current_aircraft > 0 or positions_1m > 0:
+        if _last_traffic_timestamp is None or stats_now > _last_traffic_timestamp:
+            _last_traffic_timestamp = stats_now
+
+
+def watch_last_traffic():
+    interval = load_config().get("traffic_watch_interval", 10)
+    while True:
+        try:
+            refresh_last_traffic()
+        except Exception:
+            pass
+        time.sleep(interval)
+
+
+threading.Thread(target=watch_last_traffic, daemon=True).start()
+
+
 def parse_aircraft():
     data = load_runtime_json("aircraft.json")
     raw_items = data.get("aircraft", [])
@@ -429,8 +463,6 @@ def parse_aircraft():
 
 
 def parse_receiver():
-    global _last_traffic_timestamp
-
     stats = load_runtime_json("stats.json")
     status = load_runtime_json("status.json")
 
@@ -495,7 +527,8 @@ def parse_receiver():
 
     stats_now = to_number(stats.get("now"), to_number(status.get("now"), 0))
     positions_1m = to_int(last1.get("position_count_total"), 0)
-    current_aircraft = with_pos + without_pos
+
+    refresh_last_traffic()
 
     def format_minutes_ago(minutes):
         if minutes is None:
@@ -511,10 +544,7 @@ def parse_receiver():
             return f"{hours}h {mins}m ago"
         return f"{hours}h ago"
 
-    if current_aircraft > 0 or positions_1m > 0:
-        _last_traffic_timestamp = stats_now
-        last_traffic = "Just now"
-    elif _last_traffic_timestamp is not None:
+    if _last_traffic_timestamp is not None and stats_now:
         minutes = (stats_now - _last_traffic_timestamp) / 60
         if minutes < 0:
             minutes = 0
