@@ -13,6 +13,8 @@ const SPARK_GLYPHS = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 const BASE_TITLE = 'SimorghDeck';
 const TAR1090_BASE_URL = '/tar1090/';
 let tar1090BaseUrl = TAR1090_BASE_URL;
+let recentExpanded = false;
+let lastRecentSignature = null;
 const INFO_ICON = '<svg class="icon"><use href="#i-info"></use></svg>';
 const EXTERNAL_LINK_ICON = '<svg class="icon link-icon"><use href="#i-external"></use></svg>';
 const RESTART_ICON = '<svg class="icon"><use href="#i-restart"></use></svg>';
@@ -22,6 +24,7 @@ const renderedActions = {};
 document.addEventListener('DOMContentLoaded', () => {
     bindServiceControls();
     bindInfoTips();
+    bindRecentToggle();
     initChart();
     refresh();
     setInterval(refresh, 2000);
@@ -52,7 +55,7 @@ async function refresh() {
         renderRtlSdr(data.receiver ? data.receiver.rtl_sdr : null);
         renderReceiver(data.receiver, data.aircraft);
         renderAircraft(data.aircraft || {});
-        renderRecent(data.recent, data.aircraft || {}, data.receiver ? data.receiver.stats_now : null);
+        renderRecent(data.recent, data.receiver ? data.receiver.stats_now : null);
         updateChart(data.receiver ? data.receiver.snr_db_5m : null, data.receiver ? data.receiver.stats_now : null);
     } catch (error) {
         console.error(error);
@@ -501,17 +504,24 @@ function updatePageTitle(count) {
     }
 }
 
-function renderRecent(recent, aircraft, statsNow) {
+function renderRecent(recent, statsNow) {
     const list = document.getElementById('recentList');
     const count = document.getElementById('recentCount');
 
     const items = Array.isArray(recent) ? recent : [];
-    const activeHexes = new Set((Array.isArray(aircraft.items) ? aircraft.items : []).map(item => item.hex));
-    const rows = items.filter(visit => visit && visit.hex && !activeHexes.has(visit.hex));
+    const rows = items.filter(visit => visit && visit.hex && !visit.is_open);
 
     if (count) {
         count.textContent = String(rows.length);
     }
+
+    const minuteBucket = isNumber(statsNow) ? Math.floor(statsNow / 60) : 0;
+    const signature = minuteBucket + '|' + rows.map(visit => `${visit.hex}:${visit.last_seen}:${visit.is_open ? 1 : 0}`).join(',');
+
+    if (signature === lastRecentSignature) {
+        return;
+    }
+    lastRecentSignature = signature;
 
     if (!list) {
         return;
@@ -519,10 +529,12 @@ function renderRecent(recent, aircraft, statsNow) {
 
     if (!rows.length) {
         list.innerHTML = '<div class="empty">No recent aircraft</div>';
+        updateRecentToggleLabel();
         return;
     }
 
     list.innerHTML = rows.map(visit => recentRowHtml(visit, statsNow)).join('');
+    updateRecentToggleLabel();
 }
 
 function recentRowHtml(visit, statsNow) {
@@ -531,6 +543,10 @@ function recentRowHtml(visit, statsNow) {
 
     const ago = isNumber(statsNow) && isNumber(visit.last_seen)
         ? formatAgo(statsNow - visit.last_seen)
+        : 'N/A';
+
+    const timeRange = isNumber(visit.first_seen) && isNumber(visit.last_seen)
+        ? `${formatClock(visit.first_seen)}–${formatClock(visit.last_seen)} · ${formatSpan(visit.duration_s)}`
         : 'N/A';
 
     const metaParts = [];
@@ -545,26 +561,73 @@ function recentRowHtml(visit, statsNow) {
 
     return `
         <div class="recent-row">
-            <div class="recent-ident">
-                <span class="recent-title">${escapeHtml(title)}</span>
-                <span class="hex">${escapeHtml(visit.hex || '')}</span>
-                ${metaParts.length ? `<span class="aircraft-meta">${metaParts.join(' · ')}</span>` : ''}
+            <div class="recent-top">
+                <span class="recent-ident">
+                    ${trackArrowHtml(visit.last_track_deg)}
+                    <span class="recent-title">${escapeHtml(title)}</span>
+                    <span class="hex">${escapeHtml(visit.hex || '')}</span>
+                    ${metaParts.length ? `<span class="aircraft-meta">${metaParts.join(' · ')}</span>` : ''}
+                    ${badges}
+                </span>
+                <span class="recent-when">
+                    <span class="recent-ago">${ago}</span>
+                    ${tracksUrl ? `<a class="btn btn-info btn-sm" href="${tracksUrl}" target="_blank" rel="noopener" aria-label="pTracks">${EXTERNAL_LINK_ICON}<span>pTracks</span></a>` : ''}
+                </span>
             </div>
-
-            <div class="recent-stats">
-                <span class="recent-ago">${ago}</span>
-                <span>for ${formatDuration(visit.duration_s)}</span>
-                <span>max ${isNumber(visit.max_alt_m) ? Math.round(visit.max_alt_m).toLocaleString() + ' m' : 'N/A'}</span>
-                <span>min ${isNumber(visit.min_distance_km) ? distanceValue(visit.min_distance_km) : 'N/A'}</span>
-                <span class="${rssiClass(visit.best_rssi_db)}">best ${rssiValue(visit.best_rssi_db)}</span>
-                ${badges}
-            </div>
-
-            <div class="recent-links">
-                ${tracksUrl ? `<a class="btn btn-info btn-sm" href="${tracksUrl}" target="_blank" rel="noopener">${EXTERNAL_LINK_ICON}<span>pTracks</span></a>` : ''}
+            <div class="recent-metrics">
+                <span class="recent-metric">
+                    <span>TIME</span>
+                    <span class="value">${timeRange}</span>
+                </span>
+                <span class="recent-metric">
+                    <span>MAX ALT</span>
+                    <span class="value">${isNumber(visit.max_alt_m) ? Math.round(visit.max_alt_m).toLocaleString() + ' m' : 'N/A'}</span>
+                </span>
+                <span class="recent-metric">
+                    <span>MIN DIST</span>
+                    <span class="value">${isNumber(visit.min_distance_km) ? distanceValue(visit.min_distance_km) : 'N/A'}</span>
+                </span>
+                <span class="recent-metric">
+                    <span>BEST RSSI</span>
+                    <span class="value ${rssiClass(visit.best_rssi_db)}">${rssiValue(visit.best_rssi_db)}</span>
+                </span>
             </div>
         </div>
     `;
+}
+
+function bindRecentToggle() {
+    const button = document.getElementById('recentToggle');
+    if (!button) {
+        return;
+    }
+
+    button.addEventListener('click', () => {
+        recentExpanded = !recentExpanded;
+        const list = document.getElementById('recentList');
+        if (list) {
+            list.classList.toggle('collapsed', !recentExpanded);
+        }
+        updateRecentToggleLabel();
+    });
+}
+
+function updateRecentToggleLabel() {
+    const button = document.getElementById('recentToggle');
+    if (!button) {
+        return;
+    }
+
+    const list = document.getElementById('recentList');
+    const total = list ? list.querySelectorAll('.recent-row').length : 0;
+
+    if (total <= 5) {
+        button.classList.add('hidden');
+        return;
+    }
+
+    button.classList.remove('hidden');
+    button.textContent = recentExpanded ? 'Show less' : `Show all (${total})`;
 }
 
 function pTracksUrl(value) {
@@ -594,6 +657,37 @@ function formatAgo(seconds) {
         return `${h}h ${rm}m ago`;
     }
     return `${h}h ago`;
+}
+
+function formatClock(epochSeconds) {
+    return new Date(epochSeconds * 1000).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
+}
+
+function formatSpan(seconds) {
+    if (!isNumber(seconds)) {
+        return 'N/A';
+    }
+
+    const m = Math.round(seconds / 60);
+    if (m < 60) {
+        return `${m}m`;
+    }
+
+    const h = Math.floor(m / 60);
+    const rm = m % 60;
+    return rm > 0 ? `${h}h ${rm}m` : `${h}h`;
+}
+
+function trackArrowHtml(deg) {
+    if (!isNumber(deg)) {
+        return '';
+    }
+
+    return `<span class="heading-arrow" style="transform: rotate(${Math.round(deg) - 90}deg)">➤</span>`;
 }
 
 function infoTip(tooltipText) {

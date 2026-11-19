@@ -417,6 +417,10 @@ def update_recent_visits(stats_now):
         gs = to_number(raw.get("gs"))
         speed_kmh = int(round(gs * 1.852)) if gs is not None else None
 
+        track = to_number(raw.get("track"))
+        if track is not None:
+            track = track % 360
+
         rssi = to_number(raw.get("rssi"))
         rssi_db = round(rssi, 1) if rssi is not None else None
 
@@ -445,6 +449,7 @@ def update_recent_visits(stats_now):
                 "max_speed_kmh": None,
                 "min_distance_km": None,
                 "best_rssi_db": None,
+                "last_track_deg": None,
                 "had_position": False,
                 "had_emergency": False
             }
@@ -466,6 +471,8 @@ def update_recent_visits(stats_now):
             visit["min_distance_km"] = distance_km
         if rssi_db is not None and (visit["best_rssi_db"] is None or rssi_db > visit["best_rssi_db"]):
             visit["best_rssi_db"] = rssi_db
+        if track is not None:
+            visit["last_track_deg"] = track
         if has_position:
             visit["had_position"] = True
         if emergency:
@@ -484,6 +491,7 @@ def update_recent_visits(stats_now):
     for visit in kept:
         item = dict(visit)
         item["duration_s"] = max(0.0, visit["last_seen"] - visit["first_seen"])
+        item["is_open"] = _open_visits.get(visit["hex"]) is visit
         snapshot.append(item)
     _recent_snapshot = snapshot
 
