@@ -60,7 +60,7 @@ DEFAULT_CONFIG = {
 }
 
 app = FastAPI(title="SimorghDeck API")
-router = APIRouter(prefix="/deck")
+router = APIRouter(prefix="/simorgh")
 
 os.makedirs(STATIC_DIR, exist_ok=True)
 
@@ -815,7 +815,7 @@ def control_service(name: str, action: str):
 app.include_router(router)
 
 app.mount(
-    "/deck/static",
+    "/simorgh/static",
     StaticFiles(directory=STATIC_DIR),
     name="static"
 )

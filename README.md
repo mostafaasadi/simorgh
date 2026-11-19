@@ -1,4 +1,4 @@
-# SimorghDeck
+# SimorghWDeck
 
 Mobile-first RTL-SDR ADS-B dashboard for readsb, tar1090, and graphs1090.
 
@@ -122,13 +122,13 @@ By default, SimorghDeck runs on `127.0.0.1:8000`.
 On the Raspberry Pi itself:
 
 ```text
-http://127.0.0.1:8000/deck/
+http://127.0.0.1:8000/simorgh/
 ```
 
 For direct access from other devices, change `127.0.0.1` to `0.0.0.0` in the service file, restart the service, then open:
 
 ```text
-http://YOUR_RASPBERRY_PI_IP:8000/deck/
+http://YOUR_RASPBERRY_PI_IP:8000/simorgh/
 ```
 
 If you want to serve it through a web server alongside tar1090, configure a reverse proxy.
@@ -142,7 +142,7 @@ sudo nano /etc/lighttpd/conf-enabled/89-simorghdeck.conf
 Paste:
 
 ```lighttpd
-$HTTP["url"] =~ "^/deck" {
+$HTTP["url"] =~ "^/simorgh" {
     proxy.server = (
         "" => (
             (
@@ -164,7 +164,7 @@ sudo systemctl restart lighttpd
 Then open:
 
 ```text
-http://YOUR_RASPBERRY_PI_IP/deck/
+http://YOUR_RASPBERRY_PI_IP/simorgh/
 ```
 
 ## Credits

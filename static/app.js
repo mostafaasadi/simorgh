@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function refresh() {
     try {
-        const response = await fetch('/deck/api/panel', {
+        const response = await fetch('/simorgh/api/panel', {
             cache: 'no-store'
         });
 
@@ -923,7 +923,7 @@ async function controlService(name, action) {
     });
 
     try {
-        const response = await fetch(`/deck/api/service/${encodeURIComponent(name)}/${action}`, {
+        const response = await fetch(`/simorgh/api/service/${encodeURIComponent(name)}/${action}`, {
             method: 'POST'
         });
 
