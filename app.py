@@ -387,6 +387,7 @@ def update_recent_visits(stats_now):
         raw_items = []
 
     seen_hex = set()
+    active = []
 
     for raw in raw_items:
         if not isinstance(raw, dict):
@@ -397,9 +398,20 @@ def update_recent_visits(stats_now):
             continue
 
         hex_code = str(raw.get("hex") or "").strip().upper()
-        if not hex_code or hex_code in seen_hex:
+        if not hex_code:
+            continue
+
+        if hex_code in seen_hex:
             continue
         seen_hex.add(hex_code)
+        active.append(raw)
+
+    for hex_code in list(_open_visits.keys()):
+        if hex_code not in seen_hex:
+            _open_visits.pop(hex_code, None)
+
+    for raw in active:
+        hex_code = str(raw.get("hex") or "").strip().upper()
 
         flight = str(raw.get("flight") or "").strip()
         if flight.replace("@", "").strip() == "":
@@ -433,9 +445,13 @@ def update_recent_visits(stats_now):
         has_position = lat is not None and lon is not None
 
         visit = _open_visits.get(hex_code)
-        if visit is not None and (stats_now - visit["last_seen"]) > visit_gap:
-            _open_visits.pop(hex_code, None)
-            visit = None
+
+        if visit is None:
+            for candidate in _visit_store:
+                if candidate["hex"] == hex_code and (stats_now - candidate["last_seen"]) <= visit_gap:
+                    visit = candidate
+                    _open_visits[hex_code] = visit
+                    break
 
         if visit is None:
             visit = {
@@ -479,12 +495,7 @@ def update_recent_visits(stats_now):
             visit["had_emergency"] = True
 
     visits = sorted(_visit_store, key=lambda item: item["last_seen"], reverse=True)
-
-    kept = []
-    for visit in visits:
-        if len(kept) >= max_entries and _open_visits.get(visit["hex"]) is not visit:
-            continue
-        kept.append(visit)
+    kept = visits[:max_entries]
     _visit_store[:] = kept
 
     snapshot = []
