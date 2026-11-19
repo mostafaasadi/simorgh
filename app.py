@@ -28,7 +28,9 @@ DEFAULT_CONFIG = {
     "tar1090_base_url": "/tar1090/",
     "service_status_ttl": 15,
     "rtlsdr_cache_ttl": 10,
-    "traffic_watch_interval": 10,
+    "watch_interval": 10,
+    "recent_max_entries": 20,
+    "recent_visit_gap": 900,
     "usb_devices_dir": "/sys/bus/usb/devices",
     "thermal_zone_path": "/sys/class/thermal/thermal_zone0/temp",
     "receiver_lat": None,
@@ -77,6 +79,9 @@ _rtlsdr_cache = {
     "scan_ok": False
 }
 _last_traffic_timestamp = None
+_visit_store = []
+_open_visits = {}
+_recent_snapshot = []
 
 psutil.cpu_percent(interval=None)
 
@@ -367,17 +372,141 @@ def refresh_last_traffic():
             _last_traffic_timestamp = stats_now
 
 
-def watch_last_traffic():
-    interval = load_config().get("traffic_watch_interval", 10)
+def update_recent_visits(stats_now):
+    global _recent_snapshot
+    if not stats_now:
+        return
+
+    config = load_config()
+    max_entries = to_int(config.get("recent_max_entries"), 20)
+    visit_gap = to_number(config.get("recent_visit_gap"), 900)
+
+    data = load_runtime_json("aircraft.json")
+    raw_items = data.get("aircraft", [])
+    if not isinstance(raw_items, list):
+        raw_items = []
+
+    seen_hex = set()
+
+    for raw in raw_items:
+        if not isinstance(raw, dict):
+            continue
+
+        seen = to_number(raw.get("seen"))
+        if seen is None or seen > 60:
+            continue
+
+        hex_code = str(raw.get("hex") or "").strip().upper()
+        if not hex_code or hex_code in seen_hex:
+            continue
+        seen_hex.add(hex_code)
+
+        flight = str(raw.get("flight") or "").strip()
+        if flight.replace("@", "").strip() == "":
+            flight = ""
+        registration = str(raw.get("r") or "").strip()
+        aircraft_type = str(raw.get("t") or "").strip()
+
+        alt_raw = raw.get("alt_baro", raw.get("altitude"))
+        on_ground = str(alt_raw).strip().lower() == "ground"
+        alt_ft = to_number(alt_raw)
+        alt_m = int(round(alt_ft * 0.3048)) if alt_ft is not None else None
+        if on_ground:
+            alt_m = 0
+
+        gs = to_number(raw.get("gs"))
+        speed_kmh = int(round(gs * 1.852)) if gs is not None else None
+
+        rssi = to_number(raw.get("rssi"))
+        rssi_db = round(rssi, 1) if rssi is not None else None
+
+        squawk = str(raw.get("squawk") or "").strip()
+        emergency = squawk in {"7500", "7600", "7700"}
+
+        lat = to_number(raw.get("lat"))
+        lon = to_number(raw.get("lon"))
+        distance_km = distance_from_receiver_km(lat, lon)
+        has_position = lat is not None and lon is not None
+
+        visit = _open_visits.get(hex_code)
+        if visit is not None and (stats_now - visit["last_seen"]) > visit_gap:
+            _open_visits.pop(hex_code, None)
+            visit = None
+
+        if visit is None:
+            visit = {
+                "hex": hex_code,
+                "flight": "",
+                "registration": "",
+                "aircraft_type": "",
+                "first_seen": stats_now,
+                "last_seen": stats_now,
+                "max_alt_m": None,
+                "max_speed_kmh": None,
+                "min_distance_km": None,
+                "best_rssi_db": None,
+                "had_position": False,
+                "had_emergency": False
+            }
+            _visit_store.append(visit)
+            _open_visits[hex_code] = visit
+
+        visit["last_seen"] = stats_now
+        if flight:
+            visit["flight"] = flight
+        if registration:
+            visit["registration"] = registration
+        if aircraft_type:
+            visit["aircraft_type"] = aircraft_type
+        if alt_m is not None and (visit["max_alt_m"] is None or alt_m > visit["max_alt_m"]):
+            visit["max_alt_m"] = alt_m
+        if speed_kmh is not None and (visit["max_speed_kmh"] is None or speed_kmh > visit["max_speed_kmh"]):
+            visit["max_speed_kmh"] = speed_kmh
+        if distance_km is not None and (visit["min_distance_km"] is None or distance_km < visit["min_distance_km"]):
+            visit["min_distance_km"] = distance_km
+        if rssi_db is not None and (visit["best_rssi_db"] is None or rssi_db > visit["best_rssi_db"]):
+            visit["best_rssi_db"] = rssi_db
+        if has_position:
+            visit["had_position"] = True
+        if emergency:
+            visit["had_emergency"] = True
+
+    visits = sorted(_visit_store, key=lambda item: item["last_seen"], reverse=True)
+
+    kept = []
+    for visit in visits:
+        if len(kept) >= max_entries and _open_visits.get(visit["hex"]) is not visit:
+            continue
+        kept.append(visit)
+    _visit_store[:] = kept
+
+    snapshot = []
+    for visit in kept:
+        item = dict(visit)
+        item["duration_s"] = max(0.0, visit["last_seen"] - visit["first_seen"])
+        snapshot.append(item)
+    _recent_snapshot = snapshot
+
+
+def watch_station():
     while True:
         try:
+            interval = to_number(load_config().get("watch_interval"), 10) or 10
             refresh_last_traffic()
+            stats = load_runtime_json("stats.json")
+            status = load_runtime_json("status.json")
+            stats_now = to_number(stats.get("now"), to_number(status.get("now"), 0))
+            update_recent_visits(stats_now)
         except Exception:
             pass
         time.sleep(interval)
 
 
-threading.Thread(target=watch_last_traffic, daemon=True).start()
+threading.Thread(target=watch_station, daemon=True).start()
+
+
+def get_recent_snapshot():
+    return _recent_snapshot
 
 
 def parse_aircraft():
@@ -628,7 +757,8 @@ def get_panel():
             "tar1090": config.get("tar1090_base_url", "/tar1090/")
         },
         "receiver": parse_receiver(),
-        "aircraft": parse_aircraft()
+        "aircraft": parse_aircraft(),
+        "recent": get_recent_snapshot()
     }
 
 

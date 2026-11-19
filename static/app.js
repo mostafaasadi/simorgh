@@ -52,6 +52,7 @@ async function refresh() {
         renderRtlSdr(data.receiver ? data.receiver.rtl_sdr : null);
         renderReceiver(data.receiver, data.aircraft);
         renderAircraft(data.aircraft || {});
+        renderRecent(data.recent, data.aircraft || {}, data.receiver ? data.receiver.stats_now : null);
         updateChart(data.receiver ? data.receiver.snr_db_5m : null, data.receiver ? data.receiver.stats_now : null);
     } catch (error) {
         console.error(error);
@@ -498,6 +499,101 @@ function updatePageTitle(count) {
     if (document.title !== next) {
         document.title = next;
     }
+}
+
+function renderRecent(recent, aircraft, statsNow) {
+    const list = document.getElementById('recentList');
+    const count = document.getElementById('recentCount');
+
+    const items = Array.isArray(recent) ? recent : [];
+    const activeHexes = new Set((Array.isArray(aircraft.items) ? aircraft.items : []).map(item => item.hex));
+    const rows = items.filter(visit => visit && visit.hex && !activeHexes.has(visit.hex));
+
+    if (count) {
+        count.textContent = String(rows.length);
+    }
+
+    if (!list) {
+        return;
+    }
+
+    if (!rows.length) {
+        list.innerHTML = '<div class="empty">No recent aircraft</div>';
+        return;
+    }
+
+    list.innerHTML = rows.map(visit => recentRowHtml(visit, statsNow)).join('');
+}
+
+function recentRowHtml(visit, statsNow) {
+    const title = visit.flight || visit.hex || 'UNKNOWN';
+    const tracksUrl = pTracksUrl(visit.hex);
+
+    const ago = isNumber(statsNow) && isNumber(visit.last_seen)
+        ? formatAgo(statsNow - visit.last_seen)
+        : 'N/A';
+
+    const metaParts = [];
+    if (visit.registration) {
+        metaParts.push(escapeHtml(visit.registration));
+    }
+    if (visit.aircraft_type) {
+        metaParts.push(escapeHtml(visit.aircraft_type));
+    }
+
+    const badges = `${visit.had_emergency ? '<span class="badge danger">EMG</span>' : ''}${visit.had_position ? '' : '<span class="badge muted">NO POS</span>'}`;
+
+    return `
+        <div class="recent-row">
+            <div class="recent-ident">
+                <span class="recent-title">${escapeHtml(title)}</span>
+                <span class="hex">${escapeHtml(visit.hex || '')}</span>
+                ${metaParts.length ? `<span class="aircraft-meta">${metaParts.join(' · ')}</span>` : ''}
+            </div>
+
+            <div class="recent-stats">
+                <span class="recent-ago">${ago}</span>
+                <span>for ${formatDuration(visit.duration_s)}</span>
+                <span>max ${isNumber(visit.max_alt_m) ? Math.round(visit.max_alt_m).toLocaleString() + ' m' : 'N/A'}</span>
+                <span>min ${isNumber(visit.min_distance_km) ? distanceValue(visit.min_distance_km) : 'N/A'}</span>
+                <span class="${rssiClass(visit.best_rssi_db)}">best ${rssiValue(visit.best_rssi_db)}</span>
+                ${badges}
+            </div>
+
+            <div class="recent-links">
+                ${tracksUrl ? `<a class="btn btn-info btn-sm" href="${tracksUrl}" target="_blank" rel="noopener">${EXTERNAL_LINK_ICON}<span>pTracks</span></a>` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function pTracksUrl(value) {
+    if (!isValidIcaoHex(value)) {
+        return null;
+    }
+    return tar1090BaseUrl + '?icao=' + value.toLowerCase() + '&pTracks';
+}
+
+function formatAgo(seconds) {
+    if (!isNumber(seconds)) {
+        return 'N/A';
+    }
+
+    if (seconds < 60) {
+        return 'just now';
+    }
+
+    const m = Math.floor(seconds / 60);
+    if (m < 60) {
+        return `${m}m ago`;
+    }
+
+    const h = Math.floor(m / 60);
+    const rm = m % 60;
+    if (rm > 0) {
+        return `${h}h ${rm}m ago`;
+    }
+    return `${h}h ago`;
 }
 
 function infoTip(tooltipText) {
