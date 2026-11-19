@@ -5,10 +5,11 @@ Mobile-first RTL-SDR ADS-B dashboard for readsb, tar1090, and graphs1090.
 ## Features
 
 - Mobile-first RTL-SDR ADS-B dashboard with live aircraft cards and one-click tar1090 integration
+- Recent Aircraft session list with per-visit statistics and pTracks deep links, sampled in the background
 - Trend sparklines for system health and per-aircraft metrics
 - Rolling SNR chart with service status monitoring for readsb, tar1090, and graphs1090
-- Session statistics and smart Last Traffic tracking
-- Fully local frontend with readsb service control
+- Session statistics, aircraft distance, and smart Last Traffic tracking independent of the browser tab
+- Fully local frontend with decoder service control
 
 ## Prerequisites
 
@@ -19,7 +20,8 @@ If you haven't installed them yet, the recommended method is using the automatic
 👉 [Automatic installation for readsb & tar1090](https://github.com/wiedehopf/adsb-scripts/wiki/Automatic-installation-for-readsb)
 
 **Note on Graphs1090:**
-graphs1090 is **not** installed automatically by the script above. If you want to use the performance graphs feature, you must install it manually:
+
+graphs1090 is not installed automatically by the script above. If you want to use the performance graphs feature, you must install it manually:
 
 👉 [graphs1090 Installation Guide](https://github.com/wiedehopf/graphs1090)
 
@@ -36,7 +38,7 @@ pip install -r requirements.txt
 
 ## Configuration
 
-SimorghDeck uses `config.json` for customization. If the file doesn't exist, default values are used.
+SimorghDeck uses a local `config.json` for customization. This file is private (gitignored) and must never be committed to the repository. If the file doesn't exist, default values are used.
 
 Example `config.json`:
 
@@ -46,13 +48,19 @@ Example `config.json`:
     "decoder_service": "auto",
     "decoder_candidates": ["readsb", "dump1090-fa"],
     "monitored_services": ["tar1090", "graphs1090"],
+    "controllable_services": ["tar1090", "graphs1090"],
     "service_probe_urls": {
         "tar1090": "http://127.0.0.1/tar1090/",
         "graphs1090": "http://127.0.0.1/graphs1090/"
     },
     "tar1090_base_url": "/tar1090/",
+    "receiver_lat": 0.0,
+    "receiver_lon": 0.0,
     "service_status_ttl": 15,
     "rtlsdr_cache_ttl": 10,
+    "watch_interval": 10,
+    "recent_max_entries": 20,
+    "recent_visit_gap": 900,
     "usb_devices_dir": "/sys/bus/usb/devices",
     "thermal_zone_path": "/sys/class/thermal/thermal_zone0/temp"
 }
@@ -64,6 +72,13 @@ Key configuration options:
 - `runtime_dirs`: Paths where the decoder writes JSON files.
 - `tar1090_base_url`: Base URL for tar1090 (used for aircraft direct links).
 - `service_probe_urls`: URLs to check service availability via HTTP.
+- `receiver_lat` / `receiver_lon`: Coordinates of your receiver station, used to compute aircraft distance. If missing, distance is not displayed.
+- `watch_interval`: Background sampling interval in seconds for Last Traffic and the Recent Aircraft list.
+- `recent_max_entries`: Maximum number of recent aircraft visits kept in memory.
+- `recent_visit_gap`: Silence in seconds after which a returning aircraft starts a new visit.
+- `controllable_services`: Services that can be restarted or stopped from the panel.
+
+**Note:** The Recent Aircraft list and the Last Traffic timestamp are kept in memory only and are cleared when the service restarts. No data is ever written to disk.
 
 ## Systemd Service
 
