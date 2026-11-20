@@ -1,4 +1,4 @@
-# SimorghWDeck
+# Simorgh
 
 Mobile-first RTL-SDR ADS-B dashboard for readsb, tar1090, and graphs1090.
 
@@ -29,8 +29,8 @@ graphs1090 is not installed automatically by the script above. If you want to us
 
 ```bash
 cd ~
-git clone https://github.com/mostafaasadi/simorghdeck.git
-cd simorghdeck
+git clone https://github.com/mostafaasadi/simorgh.git
+cd simorgh
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -38,7 +38,7 @@ pip install -r requirements.txt
 
 ## Configuration
 
-SimorghDeck uses a local `config.json` for customization. This file is private (gitignored) and must never be committed to the repository. If the file doesn't exist, default values are used.
+Simorgh uses a local `config.json` for customization. This file is private (gitignored) and must never be committed to the repository. If the file doesn't exist, default values are used.
 
 Example `config.json`:
 
@@ -87,20 +87,20 @@ Replace `YOUR_USERNAME` with your actual Linux username.
 Create the service file:
 
 ```bash
-sudo nano /etc/systemd/system/simorghdeck.service
+sudo nano /etc/systemd/system/simorgh.service
 ```
 
 Paste the following configuration:
 
 ```ini
 [Unit]
-Description=SimorghDeck Radar Dashboard
+Description=Simorgh ADS-B Dashboard
 After=network.target readsb.service
 
 [Service]
 User=YOUR_USERNAME
-WorkingDirectory=/home/YOUR_USERNAME/simorghdeck
-ExecStart=/home/YOUR_USERNAME/simorghdeck/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000
+WorkingDirectory=/home/YOUR_USERNAME/simorgh
+ExecStart=/home/YOUR_USERNAME/simorgh/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000
 Restart=always
 
 [Install]
@@ -111,13 +111,13 @@ Enable and start the service:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable simorghdeck
-sudo systemctl start simorghdeck
+sudo systemctl enable simorgh
+sudo systemctl start simorgh
 ```
 
 ## Accessing the Panel
 
-By default, SimorghDeck runs on `127.0.0.1:8000`.
+By default, Simorgh runs on `127.0.0.1:8000`.
 
 On the Raspberry Pi itself:
 
@@ -136,7 +136,7 @@ If you want to serve it through a web server alongside tar1090, configure a reve
 Example for lighttpd:
 
 ```bash
-sudo nano /etc/lighttpd/conf-enabled/89-simorghdeck.conf
+sudo nano /etc/lighttpd/conf-enabled/89-simorgh.conf
 ```
 
 Paste:

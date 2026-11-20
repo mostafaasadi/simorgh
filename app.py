@@ -59,7 +59,7 @@ DEFAULT_CONFIG = {
     ]
 }
 
-app = FastAPI(title="SimorghDeck API")
+app = FastAPI(title="Simorgh API")
 router = APIRouter(prefix="/simorgh")
 
 os.makedirs(STATIC_DIR, exist_ok=True)
