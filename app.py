@@ -7,6 +7,7 @@ import urllib.request
 import urllib.error
 import psutil
 from math import radians, sin, cos, asin, sqrt
+from typing import Optional
 from fastapi import FastAPI, APIRouter, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -31,6 +32,7 @@ DEFAULT_CONFIG = {
     "watch_interval": 10,
     "recent_max_entries": 20,
     "recent_visit_gap": 900,
+    "visit_profile_max_points": 240,
     "usb_devices_dir": "/sys/bus/usb/devices",
     "thermal_zone_path": "/sys/class/thermal/thermal_zone0/temp",
     "receiver_lat": None,
@@ -380,6 +382,7 @@ def update_recent_visits(stats_now):
     config = load_config()
     max_entries = to_int(config.get("recent_max_entries"), 20)
     visit_gap = to_number(config.get("recent_visit_gap"), 900)
+    max_points = to_int(config.get("visit_profile_max_points"), 240)
 
     data = load_runtime_json("aircraft.json")
     raw_items = data.get("aircraft", [])
@@ -467,7 +470,8 @@ def update_recent_visits(stats_now):
                 "best_rssi_db": None,
                 "last_track_deg": None,
                 "had_position": False,
-                "had_emergency": False
+                "had_emergency": False,
+                "series": []
             }
             _visit_store.append(visit)
             _open_visits[hex_code] = visit
@@ -494,6 +498,11 @@ def update_recent_visits(stats_now):
         if emergency:
             visit["had_emergency"] = True
 
+        series = visit["series"]
+        series.append([stats_now, alt_m, track])
+        if len(series) > max_points:
+            visit["series"] = series[::2]
+
     visits = sorted(_visit_store, key=lambda item: item["last_seen"], reverse=True)
     kept = visits[:max_entries]
     _visit_store[:] = kept
@@ -501,6 +510,7 @@ def update_recent_visits(stats_now):
     snapshot = []
     for visit in kept:
         item = dict(visit)
+        item.pop("series", None)
         item["duration_s"] = max(0.0, visit["last_seen"] - visit["first_seen"])
         item["is_open"] = _open_visits.get(visit["hex"]) is visit
         snapshot.append(item)
@@ -733,6 +743,31 @@ def parse_receiver():
             "usb_id": usb_id
         },
         "last_traffic": last_traffic
+    }
+
+
+@router.get("/api/recent/{hex_code}/profile")
+def get_visit_profile(hex_code: str, first_seen: Optional[float] = None):
+    target = None
+    hex_code = hex_code.strip().upper()
+
+    for visit in _visit_store:
+        if visit["hex"] != hex_code:
+            continue
+        if first_seen is None:
+            target = visit
+        elif abs(visit["first_seen"] - first_seen) <= 1.0:
+            target = visit
+            break
+
+    if target is None:
+        raise HTTPException(status_code=404, detail="Visit not found")
+
+    return {
+        "hex": target["hex"],
+        "first_seen": target["first_seen"],
+        "last_seen": target["last_seen"],
+        "points": target["series"]
     }
 
 

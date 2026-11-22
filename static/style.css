@@ -394,6 +394,10 @@ body {
     font-size: 15px;
 }
 
+.data.compact .heading-arrow {
+    font-size: 16px;
+}
+
 .data-stack {
     display: flex;
     flex-direction: row;
@@ -492,6 +496,11 @@ body {
     border: 1px solid rgba(51, 65, 85, 0.65);
     border-radius: 12px;
     padding: 10px 12px;
+    cursor: pointer;
+}
+
+.recent-row.expanded {
+    border-color: rgba(56, 189, 248, 0.45);
 }
 
 .recent-top {
@@ -528,6 +537,17 @@ body {
     font-weight: 700;
 }
 
+.recent-chevron {
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1;
+    transition: transform 0.12s ease;
+}
+
+.recent-row.expanded .recent-chevron {
+    transform: rotate(90deg);
+}
+
 .recent-metrics {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -556,6 +576,72 @@ body {
     font-size: 13px;
     font-weight: 700;
     word-break: break-word;
+}
+
+.recent-detail {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.recent-chart-box {
+    position: relative;
+    height: 120px;
+}
+
+.recent-chart {
+    display: block;
+}
+
+.recent-ribbon {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(51, 65, 85, 0.65);
+    border-radius: 8px;
+    padding: 6px 8px;
+}
+
+.recent-ribbon-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+}
+
+.recent-ribbon-range {
+    color: #cbd5e1;
+}
+
+.recent-ribbon-track {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2px 4px;
+    min-height: 18px;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.recent-ribbon-track .heading-arrow {
+    opacity: 0.55;
+}
+
+.recent-ribbon-track .heading-arrow:last-child {
+    opacity: 1;
+    font-size: 16px;
+}
+
+.recent-ribbon-empty {
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
 }
 
 .recent-toggle {

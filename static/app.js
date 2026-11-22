@@ -15,6 +15,9 @@ const TAR1090_BASE_URL = '/tar1090/';
 let tar1090BaseUrl = TAR1090_BASE_URL;
 let recentExpanded = false;
 let lastRecentSignature = null;
+const profileCache = new Map();
+const recentCharts = [];
+const expandedProfiles = new Set();
 const INFO_ICON = '<svg class="icon"><use href="#i-info"></use></svg>';
 const EXTERNAL_LINK_ICON = '<svg class="icon link-icon"><use href="#i-external"></use></svg>';
 const RESTART_ICON = '<svg class="icon"><use href="#i-restart"></use></svg>';
@@ -25,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     bindServiceControls();
     bindInfoTips();
     bindRecentToggle();
+    bindRecentExpand();
     initChart();
     refresh();
     setInterval(refresh, 2000);
@@ -527,6 +531,9 @@ function renderRecent(recent, statsNow) {
         return;
     }
 
+    recentCharts.forEach(instance => instance.destroy());
+    recentCharts.length = 0;
+
     if (!rows.length) {
         list.innerHTML = '<div class="empty">No recent aircraft</div>';
         updateRecentToggleLabel();
@@ -534,12 +541,23 @@ function renderRecent(recent, statsNow) {
     }
 
     list.innerHTML = rows.map(visit => recentRowHtml(visit, statsNow)).join('');
+
+    list.querySelectorAll('.recent-row.expanded').forEach(row => {
+        const detail = row.querySelector('.recent-detail');
+        if (detail && !detail.dataset.loaded) {
+            detail.dataset.loaded = '1';
+            loadVisitProfile(row, detail);
+        }
+    });
+
     updateRecentToggleLabel();
 }
 
 function recentRowHtml(visit, statsNow) {
     const title = visit.flight || visit.hex || 'UNKNOWN';
     const tracksUrl = pTracksUrl(visit.hex);
+    const profileKey = `${visit.hex}:${visit.first_seen}`;
+    const isExpanded = expandedProfiles.has(profileKey);
 
     const ago = isNumber(statsNow) && isNumber(visit.last_seen)
         ? formatAgo(statsNow - visit.last_seen)
@@ -560,7 +578,7 @@ function recentRowHtml(visit, statsNow) {
     const badges = `${visit.had_emergency ? '<span class="badge danger">EMG</span>' : ''}${visit.had_position ? '' : '<span class="badge muted">NO POS</span>'}`;
 
     return `
-        <div class="recent-row">
+        <div class="recent-row${isExpanded ? ' expanded' : ''}" data-visit-hex="${escapeHtml(visit.hex)}" data-visit-start="${visit.first_seen}">
             <div class="recent-top">
                 <span class="recent-ident">
                     ${trackArrowHtml(visit.last_track_deg)}
@@ -572,6 +590,7 @@ function recentRowHtml(visit, statsNow) {
                 <span class="recent-when">
                     <span class="recent-ago">${ago}</span>
                     ${tracksUrl ? `<a class="btn btn-info btn-sm" href="${tracksUrl}" target="_blank" rel="noopener" aria-label="pTracks">${EXTERNAL_LINK_ICON}<span>pTracks</span></a>` : ''}
+                    <span class="recent-chevron" aria-hidden="true">▸</span>
                 </span>
             </div>
             <div class="recent-metrics">
@@ -591,6 +610,12 @@ function recentRowHtml(visit, statsNow) {
                     <span>BEST RSSI</span>
                     <span class="value ${rssiClass(visit.best_rssi_db)}">${rssiValue(visit.best_rssi_db)}</span>
                 </span>
+            </div>
+            <div class="recent-detail${isExpanded ? '' : ' hidden'}">
+                <div class="recent-chart-box">
+                    <canvas class="recent-chart"></canvas>
+                </div>
+                <div class="recent-ribbon"></div>
             </div>
         </div>
     `;
@@ -628,6 +653,163 @@ function updateRecentToggleLabel() {
 
     button.classList.remove('hidden');
     button.textContent = recentExpanded ? 'Show less' : `Show all (${total})`;
+}
+
+function bindRecentExpand() {
+    const list = document.getElementById('recentList');
+    if (!list) {
+        return;
+    }
+
+    list.addEventListener('click', event => {
+        if (event.target.closest('a')) {
+            return;
+        }
+
+        const row = event.target.closest('.recent-row');
+        if (!row) {
+            return;
+        }
+
+        const detail = row.querySelector('.recent-detail');
+        if (!detail) {
+            return;
+        }
+
+        const isOpen = row.classList.toggle('expanded');
+        detail.classList.toggle('hidden', !isOpen);
+
+        const key = `${row.getAttribute('data-visit-hex')}:${row.getAttribute('data-visit-start')}`;
+        if (isOpen) {
+            expandedProfiles.add(key);
+        } else {
+            expandedProfiles.delete(key);
+        }
+
+        if (isOpen && !detail.dataset.loaded) {
+            detail.dataset.loaded = '1';
+            loadVisitProfile(row, detail);
+        }
+    });
+}
+
+async function loadVisitProfile(row, detail) {
+    const hex = row.getAttribute('data-visit-hex');
+    const firstSeen = Number(row.getAttribute('data-visit-start'));
+    const key = `${hex}:${firstSeen}`;
+
+    const canvas = detail.querySelector('.recent-chart');
+    const ribbon = detail.querySelector('.recent-ribbon');
+
+    let payload = profileCache.get(key);
+
+    if (!payload) {
+        try {
+            const response = await fetch(`/simorgh/api/recent/${encodeURIComponent(hex)}/profile?first_seen=${firstSeen}`, {
+                cache: 'no-store'
+            });
+
+            if (!response.ok) {
+                throw new Error('profile request failed');
+            }
+
+            payload = await response.json();
+            profileCache.set(key, payload);
+        } catch (error) {
+            console.error(error);
+            if (ribbon) {
+                ribbon.innerHTML = '<span class="recent-ribbon-empty">Profile unavailable</span>';
+            }
+            return;
+        }
+    }
+
+    const points = Array.isArray(payload.points) ? payload.points : [];
+
+    if (ribbon) {
+        ribbon.innerHTML = headingRibbonHtml(points);
+    }
+
+    renderVisitChart(canvas, points);
+}
+
+function headingRibbonHtml(points) {
+    const valid = points.filter(point => isNumber(point[2]));
+
+    if (!valid.length) {
+        return '<span class="recent-ribbon-empty">No heading data</span>';
+    }
+
+    const maxArrows = 20;
+    const stride = Math.max(1, Math.ceil(valid.length / maxArrows));
+    const sampled = valid.filter((point, index) => index % stride === 0);
+
+    const arrows = sampled.map(point => trackArrowHtml(point[2])).join('');
+    const firstDeg = Math.round(valid[0][2]);
+    const lastDeg = Math.round(valid[valid.length - 1][2]);
+
+    return `
+        <span class="recent-ribbon-head">
+            <span>HDG TREND</span>
+            <span class="recent-ribbon-range">${firstDeg}° → ${lastDeg}°</span>
+        </span>
+        <span class="recent-ribbon-track">${arrows}</span>
+    `;
+}
+
+function renderVisitChart(canvas, points) {
+    if (!window.Chart || !canvas) {
+        return;
+    }
+
+    const chartInstance = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: points.map(point => formatClock(point[0])),
+            datasets: [{
+                label: 'ALT m',
+                data: points.map(point => isNumber(point[1]) ? point[1] : null),
+                borderColor: '#38bdf8',
+                backgroundColor: 'rgba(56, 189, 248, 0.14)',
+                fill: true,
+                tension: 0.25,
+                pointRadius: 0,
+                borderWidth: 2,
+                spanGaps: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        maxTicksLimit: 4,
+                        maxRotation: 0
+                    },
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.08)'
+                    }
+                },
+                y: {
+                    ticks: {
+                        maxTicksLimit: 4
+                    },
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.08)'
+                    }
+                }
+            }
+        }
+    });
+
+    recentCharts.push(chartInstance);
 }
 
 function pTracksUrl(value) {
