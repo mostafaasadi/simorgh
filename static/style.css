@@ -584,13 +584,29 @@ body {
     gap: 8px;
 }
 
+.recent-charts {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+}
+
+.recent-chart-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.recent-chart-label {
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+}
+
 .recent-chart-box {
     position: relative;
     height: 120px;
-}
-
-.recent-chart {
-    display: block;
 }
 
 .recent-ribbon {
@@ -830,6 +846,10 @@ body {
         flex-direction: column;
         grid-column: 3;
         grid-row: 1 / 3;
+    }
+
+    .recent-charts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 

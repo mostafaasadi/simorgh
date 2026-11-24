@@ -612,8 +612,19 @@ function recentRowHtml(visit, statsNow) {
                 </span>
             </div>
             <div class="recent-detail${isExpanded ? '' : ' hidden'}">
-                <div class="recent-chart-box">
-                    <canvas class="recent-chart"></canvas>
+                <div class="recent-charts">
+                    <div class="recent-chart-block">
+                        <span class="recent-chart-label">ALT · SPD</span>
+                        <div class="recent-chart-box">
+                            <canvas class="recent-chart-altspd"></canvas>
+                        </div>
+                    </div>
+                    <div class="recent-chart-block">
+                        <span class="recent-chart-label">DIST</span>
+                        <div class="recent-chart-box">
+                            <canvas class="recent-chart-dist"></canvas>
+                        </div>
+                    </div>
                 </div>
                 <div class="recent-ribbon"></div>
             </div>
@@ -698,7 +709,8 @@ async function loadVisitProfile(row, detail) {
     const firstSeen = Number(row.getAttribute('data-visit-start'));
     const key = `${hex}:${firstSeen}`;
 
-    const canvas = detail.querySelector('.recent-chart');
+    const altSpdCanvas = detail.querySelector('.recent-chart-altspd');
+    const distCanvas = detail.querySelector('.recent-chart-dist');
     const ribbon = detail.querySelector('.recent-ribbon');
 
     let payload = profileCache.get(key);
@@ -730,7 +742,8 @@ async function loadVisitProfile(row, detail) {
         ribbon.innerHTML = headingRibbonHtml(points);
     }
 
-    renderVisitChart(canvas, points);
+    renderAltSpdChart(altSpdCanvas, points);
+    renderDistanceChart(distCanvas, points);
 }
 
 function headingRibbonHtml(points) {
@@ -757,7 +770,7 @@ function headingRibbonHtml(points) {
     `;
 }
 
-function renderVisitChart(canvas, points) {
+function renderAltSpdChart(canvas, points) {
     if (!window.Chart || !canvas) {
         return;
     }
@@ -771,6 +784,86 @@ function renderVisitChart(canvas, points) {
                 data: points.map(point => isNumber(point[1]) ? point[1] : null),
                 borderColor: '#38bdf8',
                 backgroundColor: 'rgba(56, 189, 248, 0.14)',
+                fill: true,
+                tension: 0.25,
+                pointRadius: 0,
+                borderWidth: 2,
+                spanGaps: true,
+                yAxisID: 'y'
+            }, {
+                label: 'SPD km/h',
+                data: points.map(point => isNumber(point[3]) ? point[3] : null),
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                fill: false,
+                tension: 0.25,
+                pointRadius: 0,
+                borderWidth: 2,
+                spanGaps: true,
+                yAxisID: 'y1'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                x: {
+                    ticks: {
+                        maxTicksLimit: 4,
+                        maxRotation: 0
+                    },
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.08)'
+                    }
+                },
+                y: {
+                    ticks: {
+                        maxTicksLimit: 4
+                    },
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.08)'
+                    }
+                },
+                y1: {
+                    position: 'right',
+                    ticks: {
+                        maxTicksLimit: 4
+                    },
+                    grid: {
+                        drawOnChartArea: false
+                    }
+                }
+            }
+        }
+    });
+
+    recentCharts.push(chartInstance);
+}
+
+function renderDistanceChart(canvas, points) {
+    if (!window.Chart || !canvas) {
+        return;
+    }
+
+    const chartInstance = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: points.map(point => formatClock(point[0])),
+            datasets: [{
+                label: 'DIST km',
+                data: points.map(point => isNumber(point[4]) ? point[4] : null),
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245, 158, 11, 0.12)',
                 fill: true,
                 tension: 0.25,
                 pointRadius: 0,
@@ -798,6 +891,7 @@ function renderVisitChart(canvas, points) {
                     }
                 },
                 y: {
+                    beginAtZero: true,
                     ticks: {
                         maxTicksLimit: 4
                     },

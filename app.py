@@ -499,7 +499,7 @@ def update_recent_visits(stats_now):
             visit["had_emergency"] = True
 
         series = visit["series"]
-        series.append([stats_now, alt_m, track])
+        series.append([stats_now, alt_m, track, speed_kmh, distance_km])
         if len(series) > max_points:
             visit["series"] = series[::2]
 
