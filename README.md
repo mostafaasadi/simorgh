@@ -173,3 +173,4 @@ This project uses the following open-source libraries, served locally:
 
 - Chart.js — https://www.chartjs.org/
 - Lucide — https://lucide.dev/
+- Flag Icons — https://github.com/lipis/flag-icons/

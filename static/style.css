@@ -827,6 +827,20 @@ body {
     margin-left: auto;
 }
 
+.flag {
+    width: 18px;
+    height: 13.5px;
+    object-fit: cover;
+    border-radius: 2px;
+    flex: 0 0 auto;
+    vertical-align: middle;
+}
+
+.flight .flag {
+    width: 24px;
+    height: 18px;
+}
+
 @media (max-width: 699px) {
     .recent-list.collapsed .recent-row:nth-child(n+6) {
         display: none;

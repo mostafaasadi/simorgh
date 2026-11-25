@@ -581,7 +581,7 @@ function recentRowHtml(visit, statsNow) {
         <div class="recent-row${isExpanded ? ' expanded' : ''}" data-visit-hex="${escapeHtml(visit.hex)}" data-visit-start="${visit.first_seen}">
             <div class="recent-top">
                 <span class="recent-ident">
-                    ${trackArrowHtml(visit.last_track_deg)}
+                    ${registrationFlagHtml(visit.registration)}
                     <span class="recent-title">${escapeHtml(title)}</span>
                     <span class="hex">${escapeHtml(visit.hex || '')}</span>
                     ${metaParts.length ? `<span class="aircraft-meta">${metaParts.join(' · ')}</span>` : ''}
@@ -906,6 +906,97 @@ function renderDistanceChart(canvas, points) {
     recentCharts.push(chartInstance);
 }
 
+const REGISTRATION_COUNTRY = {
+    '4K': 'AZ',
+    '4L': 'GE',
+    '4X': 'IL',
+    '5B': 'CY',
+    '5N': 'NG',
+    '5Y': 'KE',
+    '9M': 'MY',
+    '9V': 'SG',
+    'A4': 'OM',
+    'A6': 'AE',
+    'A7': 'QA',
+    'A9': 'BH',
+    'AP': 'PK',
+    'CC': 'CL',
+    'CU': 'CU',
+    'EC': 'ES',
+    'EI': 'IE',
+    'EK': 'AM',
+    'EP': 'IR',
+    'ES': 'EE',
+    'ET': 'ET',
+    'EX': 'KG',
+    'EY': 'TJ',
+    'EZ': 'TM',
+    'HA': 'HU',
+    'HB': 'CH',
+    'HK': 'CO',
+    'HL': 'KR',
+    'HZ': 'SA',
+    'JA': 'JP',
+    'JY': 'JO',
+    'LN': 'NO',
+    'LQ': 'AR',
+    'LV': 'AR',
+    'LY': 'LT',
+    'LZ': 'BG',
+    'OD': 'LB',
+    'OE': 'AT',
+    'OH': 'FI',
+    'OK': 'CZ',
+    'OO': 'BE',
+    'OY': 'DK',
+    'PH': 'NL',
+    'PP': 'BR',
+    'PR': 'BR',
+    'PT': 'BR',
+    'RA': 'RU',
+    'RF': 'RU',
+    'SE': 'SE',
+    'SP': 'PL',
+    'SU': 'EG',
+    'SX': 'GR',
+    'TC': 'TR',
+    'UK': 'UZ',
+    'UN': 'KZ',
+    'UR': 'UA',
+    'VH': 'AU',
+    'VT': 'IN',
+    'XA': 'MX',
+    'XB': 'MX',
+    'XC': 'MX',
+    'YI': 'IQ',
+    'YR': 'RO',
+    'YV': 'VE',
+    'ZK': 'NZ',
+    'ZS': 'ZA',
+    'B': 'CN',
+    'C': 'CA',
+    'D': 'DE',
+    'F': 'FR',
+    'G': 'GB',
+    'I': 'IT',
+    'N': 'US'
+};
+
+function registrationFlagHtml(registration) {
+    if (!registration) {
+        return '';
+    }
+
+    const clean = String(registration).toUpperCase().replace(/-/g, '');
+    const code = REGISTRATION_COUNTRY[clean.slice(0, 2)] || REGISTRATION_COUNTRY[clean.slice(0, 1)];
+
+    if (!code) {
+        return '';
+    }
+
+    return `<img class="flag" src="/simorgh/static/vendor/flags/${code.toLowerCase()}.svg" alt="${code}" title="${code}" draggable="false" onerror="this.remove()">`;
+}
+
 function pTracksUrl(value) {
     if (!isValidIcaoHex(value)) {
         return null;
@@ -985,6 +1076,7 @@ function aircraftCard(ac) {
     const title = ac.flight || ac.hex || 'UNKNOWN';
     const hex = ac.hex;
     const icaoUrl = tar1090IcaoUrl(hex);
+    const flag = registrationFlagHtml(ac.registration);
 
     const positionBadge = ac.has_position
         ? '<span class="badge info">POS</span>'
@@ -1010,8 +1102,8 @@ function aircraftCard(ac) {
         : '';
 
     const flightNode = icaoUrl
-        ? `<a class="flight ident-link" href="${icaoUrl}" target="_blank" rel="noopener">${escapeHtml(title)}${EXTERNAL_LINK_ICON}</a>`
-        : `<span class="flight">${escapeHtml(title)}</span>`;
+        ? `<a class="flight ident-link" href="${icaoUrl}" target="_blank" rel="noopener">${flag}${escapeHtml(title)}${EXTERNAL_LINK_ICON}</a>`
+        : `<span class="flight">${flag}${escapeHtml(title)}</span>`;
 
     const hexNode = icaoUrl
         ? `<a class="hex ident-link" href="${icaoUrl}" target="_blank" rel="noopener">${escapeHtml(hex)}</a>`
