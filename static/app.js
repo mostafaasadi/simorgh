@@ -626,7 +626,7 @@ function recentRowHtml(visit, statsNow) {
                         </div>
                     </div>
                 </div>
-                <div class="recent-ribbon"></div>
+                <div class="recent-hdg"></div>
             </div>
         </div>
     `;
@@ -711,7 +711,7 @@ async function loadVisitProfile(row, detail) {
 
     const altSpdCanvas = detail.querySelector('.recent-chart-altspd');
     const distCanvas = detail.querySelector('.recent-chart-dist');
-    const ribbon = detail.querySelector('.recent-ribbon');
+    const hdg = detail.querySelector('.recent-hdg');
 
     let payload = profileCache.get(key);
 
@@ -729,8 +729,8 @@ async function loadVisitProfile(row, detail) {
             profileCache.set(key, payload);
         } catch (error) {
             console.error(error);
-            if (ribbon) {
-                ribbon.innerHTML = '<span class="recent-ribbon-empty">Profile unavailable</span>';
+            if (hdg) {
+                hdg.innerHTML = '<span class="recent-hdg-empty">Profile unavailable</span>';
             }
             return;
         }
@@ -738,33 +738,129 @@ async function loadVisitProfile(row, detail) {
 
     const points = Array.isArray(payload.points) ? payload.points : [];
 
-    if (ribbon) {
-        ribbon.innerHTML = headingRibbonHtml(points);
+    if (hdg) {
+        hdg.innerHTML = headingBlockHtml(points, key);
     }
 
     renderAltSpdChart(altSpdCanvas, points);
     renderDistanceChart(distCanvas, points);
 }
 
-function headingRibbonHtml(points) {
+function headingDelta(fromDeg, toDeg) {
+    const diff = ((toDeg - fromDeg) % 360 + 360) % 360;
+    return diff > 180 ? diff - 360 : diff;
+}
+
+function analyzeHeadingSeries(points) {
     const valid = points.filter(point => isNumber(point[2]));
 
     if (!valid.length) {
-        return '<span class="recent-ribbon-empty">No heading data</span>';
+        return null;
     }
 
+    const firstDeg = valid[0][2];
+    const lastDeg = valid[valid.length - 1][2];
+    let totalTurn = 0;
+
+    for (let i = 1; i < valid.length; i += 1) {
+        totalTurn += headingDelta(valid[i - 1][2], valid[i][2]);
+    }
+
+    return {
+        firstDeg: firstDeg,
+        lastDeg: lastDeg,
+        netChange: headingDelta(firstDeg, lastDeg),
+        totalTurn: totalTurn
+    };
+}
+
+function formatTurn(degrees) {
+    const rounded = Math.round(degrees);
+    const sign = rounded >= 0 ? '+' : '-';
+    return `${sign}${Math.abs(rounded)}°`;
+}
+
+function headingBlockHtml(points, markerKey) {
+    const analysis = analyzeHeadingSeries(points);
+
+    if (!analysis) {
+        return '<span class="recent-hdg-empty">No heading data</span>';
+    }
+
+    const cx = 50;
+    const cy = 50;
+    const dialRadius = 40;
+    const arcRadius = 31;
+    const absNet = Math.abs(analysis.netChange);
+    const markerId = `hdgArrow${String(markerKey).replace(/[^a-zA-Z0-9]/g, '')}`;
+
+    const toX = (deg, radius) => (cx + radius * Math.sin(deg * Math.PI / 180)).toFixed(2);
+    const toY = (deg, radius) => (cy - radius * Math.cos(deg * Math.PI / 180)).toFixed(2);
+
+    let ticksHtml = '';
+    for (let angle = 0; angle < 360; angle += 30) {
+        const isCardinal = angle % 90 === 0;
+        const innerRadius = isCardinal ? 33 : 36;
+        ticksHtml += `<line x1="${toX(angle, innerRadius)}" y1="${toY(angle, innerRadius)}" x2="${toX(angle, dialRadius)}" y2="${toY(angle, dialRadius)}" stroke="${isCardinal ? '#64748b' : '#475569'}" stroke-width="1"></line>`;
+    }
+
+    const cardinals = [[0, 'N'], [90, 'E'], [180, 'S'], [270, 'W']];
+    let labelsHtml = '';
+    cardinals.forEach(([angle, letter]) => {
+        labelsHtml += `<text x="${toX(angle, 45)}" y="${toY(angle, 45)}" class="recent-compass-label" text-anchor="middle" dominant-baseline="middle">${letter}</text>`;
+    });
+
+    let arcHtml = '';
+    if (Math.abs(analysis.totalTurn) >= 360) {
+        arcHtml = `<circle cx="${cx}" cy="${cy}" r="${arcRadius}" class="recent-compass-arc"></circle>`;
+    } else if (absNet >= 1) {
+        const sweep = analysis.netChange > 0 ? 1 : 0;
+        const largeArc = absNet > 180 ? 1 : 0;
+        arcHtml = `<path d="M ${toX(analysis.firstDeg, arcRadius)} ${toY(analysis.firstDeg, arcRadius)} A ${arcRadius} ${arcRadius} 0 ${largeArc} ${sweep} ${toX(analysis.lastDeg, arcRadius)} ${toY(analysis.lastDeg, arcRadius)}" class="recent-compass-arc" marker-end="url(#${markerId})"></path>`;
+    }
+
+    const valid = points.filter(point => isNumber(point[2]));
     const maxArrows = 20;
     const stride = Math.max(1, Math.ceil(valid.length / maxArrows));
     const sampled = valid.filter((point, index) => index % stride === 0);
-
     const arrows = sampled.map(point => trackArrowHtml(point[2])).join('');
-    const firstDeg = Math.round(valid[0][2]);
-    const lastDeg = Math.round(valid[valid.length - 1][2]);
+
+    const turnNote = Math.abs(analysis.totalTurn) >= 360
+        ? ` (${(Math.abs(analysis.totalTurn) / 360).toFixed(1)} rev)`
+        : '';
 
     return `
-        <span class="recent-ribbon-head">
+        <span class="recent-hdg-head">
             <span>HDG TREND</span>
-            <span class="recent-ribbon-range">${firstDeg}° → ${lastDeg}°</span>
+            <span class="recent-hdg-range">${Math.round(analysis.firstDeg)}° → ${Math.round(analysis.lastDeg)}°</span>
+        </span>
+        <span class="recent-hdg-body">
+            <span class="recent-compass-dial">
+                <svg viewBox="0 0 100 100" role="img" aria-label="Heading compass">
+                    <defs>
+                        <marker id="${markerId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                            <path d="M0,0 L10,5 L0,10 z" fill="#f59e0b"></path>
+                        </marker>
+                    </defs>
+                    <circle cx="${cx}" cy="${cy}" r="${dialRadius}" fill="none" stroke="rgba(148, 163, 184, 0.25)" stroke-width="1"></circle>
+                    ${ticksHtml}
+                    ${labelsHtml}
+                    ${arcHtml}
+                    <line x1="${cx}" y1="${cy}" x2="${toX(analysis.firstDeg, 24)}" y2="${toY(analysis.firstDeg, 24)}" class="recent-compass-needle-first"></line>
+                    <line x1="${cx}" y1="${cy}" x2="${toX(analysis.lastDeg, 30)}" y2="${toY(analysis.lastDeg, 30)}" class="recent-compass-needle-last"></line>
+                    <circle cx="${cx}" cy="${cy}" r="2.2" fill="#e2e8f0"></circle>
+                </svg>
+            </span>
+            <span class="recent-compass-stats">
+                <span class="recent-compass-row">
+                    <span>Net Change</span>
+                    <strong>${formatTurn(analysis.netChange)}</strong>
+                </span>
+                <span class="recent-compass-row">
+                    <span>Total Turn</span>
+                    <strong>${formatTurn(analysis.totalTurn)}${turnNote}</strong>
+                </span>
+            </span>
         </span>
         <span class="recent-ribbon-track">${arrows}</span>
     `;

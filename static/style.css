@@ -609,17 +609,17 @@ body {
     height: 120px;
 }
 
-.recent-ribbon {
+.recent-hdg {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
     background: rgba(15, 23, 42, 0.6);
     border: 1px solid rgba(51, 65, 85, 0.65);
     border-radius: 8px;
-    padding: 6px 8px;
+    padding: 8px;
 }
 
-.recent-ribbon-head {
+.recent-hdg-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -630,8 +630,54 @@ body {
     letter-spacing: 0.08em;
 }
 
-.recent-ribbon-range {
+.recent-hdg-range {
     color: #cbd5e1;
+}
+
+.recent-hdg-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+
+.recent-hdg-empty {
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.recent-compass-dial {
+    flex: 0 0 auto;
+}
+
+.recent-compass-dial svg {
+    width: 84px;
+    height: 84px;
+    display: block;
+}
+
+.recent-compass-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    flex: 1;
+}
+
+.recent-compass-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.recent-compass-row strong {
+    color: #e2e8f0;
+    font-weight: 700;
 }
 
 .recent-ribbon-track {
@@ -654,14 +700,46 @@ body {
     font-size: 16px;
 }
 
-.recent-ribbon-empty {
-    color: #94a3b8;
-    font-size: 11px;
-    font-weight: 600;
+.recent-compass-needle-first {
+    stroke: #64748b;
+    stroke-width: 1.5;
+    opacity: 0.75;
+}
+
+.recent-compass-needle-last {
+    stroke: #38bdf8;
+    stroke-width: 2;
+}
+
+.recent-compass-arc {
+    fill: none;
+    stroke: #f59e0b;
+    stroke-width: 1.5;
+    opacity: 0.85;
+}
+
+.recent-compass-label {
+    fill: #94a3b8;
+    font-size: 7px;
+    font-weight: 700;
 }
 
 .recent-toggle {
     margin: 10px auto 0;
+}
+
+.flag {
+    width: 18px;
+    height: 13.5px;
+    object-fit: cover;
+    border-radius: 2px;
+    flex: 0 0 auto;
+    vertical-align: middle;
+}
+
+.flight .flag {
+    width: 24px;
+    height: 18px;
 }
 
 .stats-grid {
@@ -825,20 +903,6 @@ body {
 .metric-label .info-tip,
 .stat-label .info-tip {
     margin-left: auto;
-}
-
-.flag {
-    width: 18px;
-    height: 13.5px;
-    object-fit: cover;
-    border-radius: 2px;
-    flex: 0 0 auto;
-    vertical-align: middle;
-}
-
-.flight .flag {
-    width: 24px;
-    height: 18px;
 }
 
 @media (max-width: 699px) {
